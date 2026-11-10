@@ -198,7 +198,7 @@ class OverlayDialog(
         val params = WindowManager.LayoutParams(
             width,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_DIM_BEHIND,
             android.graphics.PixelFormat.TRANSLUCENT
         ).apply {
@@ -206,7 +206,7 @@ class OverlayDialog(
             dimAmount = 0.4f
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
         }
-        windowManager.addView(container, params)
+        OverlayUtils.addOverlayViewSafely(windowManager, container, params)
         root = container
     }
 

@@ -11,7 +11,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.ContextThemeWrapper
-import android.view.ViewTreeObserver
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
@@ -38,6 +38,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import kotlin.random.Random
@@ -134,7 +135,8 @@ class AutoClickService : AccessibilityService() {
         }
         try {
             val connector = ConnectorView(uiContext) { connectedPairs() }
-            windowManager.addView(
+            OverlayUtils.addOverlayViewSafely(
+                windowManager,
                 connector,
                 OverlayUtils.createParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -158,7 +160,13 @@ class AutoClickService : AccessibilityService() {
         overlayVisible = true
         lastScreen = screenBounds()
         calibrateOrigin {
-            restoreSnapshot()
+            if (snapshotSteps.isNotEmpty()) {
+                restoreSnapshot()
+            } else if (steps.isEmpty()) {
+                // Tự tạo sẵn mục tiêu #1 ở giữa màn hình để người dùng kéo thả và bấm Chạy ngay
+                addTapAtCenter()
+            }
+            refreshConnectorVisibility()
         }
         notifyStateChanged()
     }
@@ -197,22 +205,21 @@ class AutoClickService : AccessibilityService() {
      */
     private fun calibrateOrigin(onDone: () -> Unit) {
         val connector = connectorView ?: return
-        connector.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                if (connector.viewTreeObserver.isAlive) {
-                    connector.viewTreeObserver.removeOnPreDrawListener(this)
-                }
-                val location = IntArray(2)
-                connector.getLocationOnScreen(location)
-                origin.x = location[0]
-                origin.y = location[1]
-                if (overlayVisible) {
-                    onDone()
-                }
-                return true
+        connector.visibility = View.VISIBLE
+        var executed = false
+        val finish = Runnable {
+            if (executed) return@Runnable
+            executed = true
+            val location = IntArray(2)
+            connector.getLocationOnScreen(location)
+            origin.x = location[0]
+            origin.y = location[1]
+            if (overlayVisible) {
+                onDone()
             }
-        })
-        connector.invalidate()
+        }
+        connector.post(finish)
+        handler.postDelayed(finish, 120L)
     }
 
     private fun handleScreenChanged() {
@@ -234,7 +241,7 @@ class AutoClickService : AccessibilityService() {
             }
             lastScreen = newScreen
             controlBar?.onScreenChanged()
-            connectorView?.invalidate()
+            refreshConnectorVisibility()
         }
     }
 
@@ -244,6 +251,15 @@ class AutoClickService : AccessibilityService() {
         val scaleX = if (snapshotScreen.x > 0) screen.x.toFloat() / snapshotScreen.x else 1f
         val scaleY = if (snapshotScreen.y > 0) screen.y.toFloat() / snapshotScreen.y else 1f
         buildStepsFromData(snapshotSteps, scaleX, scaleY)
+    }
+
+    private fun refreshConnectorVisibility() {
+        val connector = connectorView ?: return
+        val hasSwipes = steps.any { it.type == StepType.SWIPE }
+        connector.visibility = if (hasSwipes) View.VISIBLE else View.GONE
+        if (hasSwipes) {
+            connector.invalidate()
+        }
     }
 
     // ------------------------------------------------------------------
@@ -273,7 +289,7 @@ class AutoClickService : AccessibilityService() {
         }
         steps.add(step)
         renumber()
-        connectorView?.invalidate()
+        refreshConnectorVisibility()
         return step
     }
 
@@ -305,14 +321,14 @@ class AutoClickService : AccessibilityService() {
     private fun clearSteps() {
         steps.forEach { step -> step.views().forEach { it.detach() } }
         steps.clear()
-        connectorView?.invalidate()
+        refreshConnectorVisibility()
     }
 
     private fun removeStep(step: ScenarioStep) {
         if (!steps.remove(step)) return
         step.views().forEach { it.detach() }
         renumber()
-        connectorView?.invalidate()
+        refreshConnectorVisibility()
     }
 
     private fun staggerOffset(): Int =
@@ -472,6 +488,8 @@ class AutoClickService : AccessibilityService() {
 
         playJob = scope.launch {
             try {
+                // Đợi WindowManager cập nhật cờ FLAG_NOT_TOUCHABLE trước khi bắn cử chỉ đầu tiên
+                delay(80L)
                 runLoop()
             } catch (e: CancellationException) {
                 throw e
@@ -514,8 +532,8 @@ class AutoClickService : AccessibilityService() {
         if (randomize) {
             waitMs += Random.nextLong(-JITTER_DELAY_MS, JITTER_DELAY_MS + 1)
         }
-        waitMs = waitMs.coerceAtLeast(0L)
-        if (waitMs > 0L) delay(waitMs)
+        waitMs = waitMs.coerceAtLeast(10L)
+        delay(waitMs)
 
         val screen = screenBounds()
         val startPoint = step.start.liveCenter()
@@ -538,23 +556,29 @@ class AutoClickService : AccessibilityService() {
             if (step.type == StepType.SWIPE) {
                 x2 += jitterPx()
                 y2 += jitterPx()
+            } else {
+                x2 = x1
+                y2 = y1
             }
         }
 
-        x1 = x1.coerceIn(0f, (screen.x - 1).toFloat())
-        y1 = y1.coerceIn(0f, (screen.y - 1).toFloat())
-        x2 = x2.coerceIn(0f, (screen.x - 1).toFloat())
-        y2 = y2.coerceIn(0f, (screen.y - 1).toFloat())
+        x1 = x1.coerceIn(1f, (screen.x - 2).toFloat())
+        y1 = y1.coerceIn(1f, (screen.y - 2).toFloat())
+        x2 = x2.coerceIn(1f, (screen.x - 2).toFloat())
+        y2 = y2.coerceIn(1f, (screen.y - 2).toFloat())
 
         val maxDuration = GestureDescription.getMaxGestureDuration()
         val duration = step.durationMs.coerceIn(1L, maxDuration)
 
+        // Luôn gọi cả moveTo và lineTo để mọi ROM Android (Xiaomi, Samsung, Oppo, Vivo...)
+        // đều nhận diện đúng contour của cử chỉ Chạm lẫn Vuốt.
         val path = Path().apply {
             moveTo(x1, y1)
-            if (step.type == StepType.SWIPE) {
-                lineTo(x2, y2)
-            }
+            lineTo(x2, y2)
         }
+
+        step.start.pulse()
+        step.end?.pulse()
 
         val success = dispatchStroke(path, duration)
         if (!success) {
@@ -566,26 +590,28 @@ class AutoClickService : AccessibilityService() {
         Random.nextInt(-JITTER_PX, JITTER_PX + 1).toFloat()
 
     private suspend fun dispatchStroke(path: Path, durationMs: Long): Boolean =
-        suspendCancellableCoroutine { continuation ->
-            val gesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
-                .build()
+        withTimeoutOrNull(durationMs + 1500L) {
+            suspendCancellableCoroutine { continuation ->
+                val gesture = GestureDescription.Builder()
+                    .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
+                    .build()
 
-            val callback = object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
-                    if (continuation.isActive) continuation.resume(true)
+                val callback = object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        if (continuation.isActive) continuation.resume(true)
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        if (continuation.isActive) continuation.resume(false)
+                    }
                 }
 
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    if (continuation.isActive) continuation.resume(false)
+                val accepted = dispatchGesture(gesture, callback, handler)
+                if (!accepted && continuation.isActive) {
+                    continuation.resume(false)
                 }
             }
-
-            val accepted = dispatchGesture(gesture, callback, null)
-            if (!accepted && continuation.isActive) {
-                continuation.resume(false)
-            }
-        }
+        } ?: false
 
     // ------------------------------------------------------------------
     // Tiện ích

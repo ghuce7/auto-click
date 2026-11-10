@@ -18,7 +18,8 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 /**
- * Thanh điều khiển nổi: kéo thả được, có thể thu gọn thành 1 icon duy nhất.
+ * Thanh điều khiển nổi: kéo thả được ở bất kỳ vị trí nào trên thanh,
+ * có thể thu gọn thành 1 icon duy nhất.
  */
 class FloatingControlBar(
     private val context: Context,
@@ -36,8 +37,8 @@ class FloatingControlBar(
         fun onClose()
     }
 
-    private val buttonSize = OverlayUtils.dp(context, 42)
-    private val iconSize = OverlayUtils.dp(context, 44)
+    private val buttonSize = OverlayUtils.dp(context, 44)
+    private val iconSize = OverlayUtils.dp(context, 46)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop * 1.5f
 
     private val barParams = OverlayUtils.createParams(
@@ -49,7 +50,7 @@ class FloatingControlBar(
     private var barAdded = false
     private var iconAdded = false
     private var posX = OverlayUtils.dp(context, 16)
-    private var posY = OverlayUtils.dp(context, 16)
+    private var posY = OverlayUtils.dp(context, 80)
 
     var isCollapsed: Boolean = false
         private set
@@ -62,21 +63,21 @@ class FloatingControlBar(
         playButton = makeButton("▶", "Chạy", COLOR_PLAY) { actions.onPlayPause() }
 
         val handle = TextView(context).apply {
-            text = "⋮"
+            text = "✥"
             setTextColor(Color.WHITE)
-            textSize = 22f
+            textSize = 18f
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(OverlayUtils.dp(context, 22), buttonSize)
+            layoutParams = LinearLayout.LayoutParams(OverlayUtils.dp(context, 28), buttonSize)
         }
         attachDrag(handle, null)
 
         barView = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val pad = OverlayUtils.dp(context, 4)
+            val pad = OverlayUtils.dp(context, 5)
             setPadding(pad, pad, pad, pad)
             background = OverlayUtils.roundedBackground(
-                Color.argb(0xB8, 0x1B, 0x1F, 0x24),
+                Color.argb(0xCC, 0x1B, 0x1F, 0x24),
                 OverlayUtils.dpF(context, 14f),
                 Color.argb(0x66, 255, 255, 255),
                 OverlayUtils.dp(context, 1)
@@ -109,7 +110,7 @@ class FloatingControlBar(
     private fun styledLabel(symbol: String, label: String): SpannableString {
         val spannable = SpannableString("$symbol\n$label")
         spannable.setSpan(
-            RelativeSizeSpan(1.7f),
+            RelativeSizeSpan(1.65f),
             0,
             symbol.length,
             Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -121,7 +122,7 @@ class FloatingControlBar(
         TextView(context).apply {
             text = styledLabel(symbol, label)
             setTextColor(Color.WHITE)
-            textSize = 8.5f
+            textSize = 9f
             isAllCaps = false
             gravity = Gravity.CENTER
             maxLines = 2
@@ -131,7 +132,7 @@ class FloatingControlBar(
                 marginStart = OverlayUtils.dp(context, 3)
             }
             background = OverlayUtils.rippleBackground(color, OverlayUtils.dpF(context, 10f))
-            setOnClickListener { onClick() }
+            attachDrag(this, onClick)
         }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -149,18 +150,23 @@ class FloatingControlBar(
                     startX = posX
                     startY = posY
                     dragging = false
+                    v.isPressed = true
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (!dragging && hypot(dx, dy) > touchSlop) dragging = true
+                    if (!dragging && hypot(dx, dy) > touchSlop) {
+                        dragging = true
+                        v.isPressed = false
+                    }
                     if (dragging) moveTo(startX + dx.toInt(), startY + dy.toInt())
                     true
                 }
 
                 MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
                     if (!dragging) {
                         v.performClick()
                         onClick?.invoke()
@@ -170,6 +176,7 @@ class FloatingControlBar(
                 }
 
                 MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
                     dragging = false
                     true
                 }
@@ -197,9 +204,17 @@ class FloatingControlBar(
         iconParams.x = posX
         iconParams.y = posY
         if (isCollapsed && iconAdded) {
-            windowManager.updateViewLayout(iconView, iconParams)
+            try {
+                windowManager.updateViewLayout(iconView, iconParams)
+            } catch (e: IllegalArgumentException) {
+                // View không còn gắn trên WindowManager.
+            }
         } else if (!isCollapsed && barAdded) {
-            windowManager.updateViewLayout(barView, barParams)
+            try {
+                windowManager.updateViewLayout(barView, barParams)
+            } catch (e: IllegalArgumentException) {
+                // View không còn gắn trên WindowManager.
+            }
         }
     }
 
@@ -256,13 +271,13 @@ class FloatingControlBar(
 
     private fun addBar() {
         if (barAdded) return
-        windowManager.addView(barView, barParams)
+        OverlayUtils.addOverlayViewSafely(windowManager, barView, barParams)
         barAdded = true
     }
 
     private fun addIcon() {
         if (iconAdded) return
-        windowManager.addView(iconView, iconParams)
+        OverlayUtils.addOverlayViewSafely(windowManager, iconView, iconParams)
         iconAdded = true
     }
 

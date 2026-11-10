@@ -5,8 +5,9 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.PointF
 import android.graphics.Point
+import android.graphics.PointF
+import android.os.Build
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -54,6 +55,7 @@ class TargetView(
 
     private var locked = false
     private var added = false
+    private var pulsing = false
 
     private var downRawX = 0f
     private var downRawY = 0f
@@ -67,6 +69,10 @@ class TargetView(
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.argb(0x55, Color.red(role.baseColor), Color.green(role.baseColor), Color.blue(role.baseColor))
+    }
+    private val pulsePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(0xAA, 255, 235, 59)
     }
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -95,15 +101,25 @@ class TargetView(
         val cx = width / 2f
         val cy = height / 2f
         val radius = min(width, height) / 2f - strokeWidth
-        canvas.drawCircle(cx, cy, radius, fillPaint)
+        canvas.drawCircle(cx, cy, radius, if (pulsing) pulsePaint else fillPaint)
         canvas.drawCircle(cx, cy, radius, ringPaint)
         val arm = radius * 0.4f
         canvas.drawLine(cx - arm, cy, cx + arm, cy, crossPaint)
         canvas.drawLine(cx, cy - arm, cx, cy + arm, crossPaint)
-        canvas.drawCircle(cx, cy, OverlayUtils.dpF(context, 2.5f), dotPaint)
+        canvas.drawCircle(cx, cy, OverlayUtils.dpF(context, if (pulsing) 5f else 2.5f), dotPaint)
         val metrics = textPaint.fontMetrics
         val textY = cy - radius * 0.52f - (metrics.ascent + metrics.descent) / 2f
         canvas.drawText(label, cx, textY, textPaint)
+    }
+
+    /** Hiệu ứng nháy sáng mỗi khi mục tiêu thực hiện thao tác chạm/vuốt. */
+    fun pulse() {
+        pulsing = true
+        invalidate()
+        postDelayed({
+            pulsing = false
+            invalidate()
+        }, 90L)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -164,7 +180,11 @@ class TargetView(
         windowParams.x = centerX - sizePx / 2 - origin.x
         windowParams.y = centerY - sizePx / 2 - origin.y
         if (added) {
-            windowManager.updateViewLayout(this, windowParams)
+            try {
+                windowManager.updateViewLayout(this, windowParams)
+            } catch (e: IllegalArgumentException) {
+                // View không còn gắn trên WindowManager.
+            }
         }
     }
 
@@ -179,14 +199,25 @@ class TargetView(
         } else {
             windowParams.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            windowParams.alpha = if (value) {
+                OverlayUtils.OVERLAY_ALPHA_PASS_THROUGH
+            } else {
+                OverlayUtils.OVERLAY_ALPHA_ACTIVE
+            }
+        }
         if (added) {
-            windowManager.updateViewLayout(this, windowParams)
+            try {
+                windowManager.updateViewLayout(this, windowParams)
+            } catch (e: IllegalArgumentException) {
+                // View không còn gắn trên WindowManager.
+            }
         }
     }
 
     fun attach() {
         if (added) return
-        windowManager.addView(this, windowParams)
+        OverlayUtils.addOverlayViewSafely(windowManager, this, windowParams)
         added = true
     }
 
