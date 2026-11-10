@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Auto Clicker</string>
+    <string name="accessibility_service_label">Auto Clicker</string>
+    <string name="accessibility_service_description">Cho phép Auto Clicker thực hiện thao tác chạm, nhấn giữ và vuốt thay bạn theo kịch bản đã cài đặt.</string>
+
+    <string name="main_title">Auto Clicker</string>
+    <string name="main_subtitle">Cấp đủ 2 quyền bên dưới rồi bật thanh điều khiển nổi.</string>
+
+    <string name="btn_overlay_grant">1. Cấp quyền Hiển thị trên ứng dụng khác</string>
+    <string name="btn_overlay_granted">1. Hiển thị trên ứng dụng khác: ĐÃ CẤP ✓</string>
+    <string name="btn_accessibility_grant">2. Bật dịch vụ Trợ năng (Accessibility)</string>
+    <string name="btn_accessibility_granted">2. Dịch vụ Trợ năng: ĐÃ BẬT ✓</string>
+    <string name="btn_toggle_on">Bật thanh điều khiển nổi</string>
+    <string name="btn_toggle_off">Tắt thanh điều khiển nổi</string>
+    <string name="btn_toggle_locked">Bật thanh điều khiển nổi (cần đủ 2 quyền)</string>
+
+    <string name="switch_anti_detection">Anti-Detection (Randomize)</string>
+    <string name="switch_anti_detection_desc">Tự động cộng/trừ ngẫu nhiên ±6px vào tọa độ X/Y và ±15ms vào Delay để giống thao tác người thật.</string>
+
+    <string name="presets_title">Kịch bản đã lưu</string>
+    <string name="presets_empty">Chưa có kịch bản nào. Dùng nút \"Lưu/Tải\" trên thanh điều khiển nổi để lưu.</string>
+    <string name="preset_info">%1$d bước</string>
+    <string name="preset_rename">Đổi tên</string>
+    <string name="preset_delete">Xóa</string>
+    <string name="preset_rename_title">Đổi tên kịch bản</string>
+    <string name="preset_rename_hint">Tên mới</string>
+    <string name="preset_delete_title">Xóa kịch bản</string>
+    <string name="preset_delete_message">Bạn có chắc muốn xóa kịch bản \"%1$s\"?</string>
+    <string name="action_ok">Đồng ý</string>
+    <string name="action_cancel">Hủy</string>
+
+    <string name="toast_overlay_granted">Quyền hiển thị trên ứng dụng khác đã được cấp.</string>
+    <string name="toast_accessibility_granted">Dịch vụ Trợ năng đã được bật.</string>
+    <string name="toast_accessibility_guide">Hãy tìm \"Auto Clicker\" trong danh sách và bật lên.</string>
+    <string name="toast_service_not_connected">Dịch vụ Trợ năng chưa kết nối. Hãy tắt rồi bật lại Auto Clicker trong Cài đặt Trợ năng.</string>
+    <string name="toast_name_invalid">Tên không hợp lệ hoặc đã tồn tại.</string>
+    <string name="toast_overlay_open_failed">Không mở được màn hình cài đặt quyền.</string>
+</resources>

@@ -1,0 +1,3 @@
+-keep class com.personal.autoclicker.model.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
